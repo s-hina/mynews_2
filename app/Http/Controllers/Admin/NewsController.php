@@ -8,6 +8,10 @@ use Illuminate\Http\Request;
 // 以下を追記することでNews Modelが扱えるようになる
 use App\News;
 
+use App\History;
+
+use Carbon\Carbon;
+
 class NewsController extends Controller
 {
     public function add()
@@ -72,21 +76,29 @@ class NewsController extends Controller
         // Validationをかける
         $this->validate($request, News::$rules);
         // News Modelからデータを取得する
-        $news = News::find($request->id);
+        $news = News::find($request->input('id'));
         // 送信されてきたフォームデータを格納する
         $news_form = $request->all();
-        if (isset($news_form['image'])) {
-          $path = $request->file('image')->store('public/image');
-          $news->image_path = basename($path);
-          unset($news_form['image']);
-        } elseif (0 == strcmp($request->remove, 'true')) {
-          $news->image_path = null;
+        if ($request->input('remove')) {
+            $news_form['image_path'] = null;
+        } elseif ($request->file('image')) {
+            $path = $request->file('image')->store('public/image');
+            $news_form['image_path'] = basename($path);
+        } else {
+            $news_form['image_path'] = $news->image_path;
         }
+
         unset($news_form['_token']);
+        unset($news_form['image']);
         unset($news_form['remove']);
 
         // 該当するデータを上書きして保存する
         $news->fill($news_form)->save();
+
+        $history = new History;
+        $history->news_id = $news->id;
+        $history->edited_at = Carbon::now();
+        $history->save();
 
         return redirect('admin/news');
     }
